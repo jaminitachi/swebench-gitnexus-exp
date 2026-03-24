@@ -69,26 +69,42 @@ def load_tasks(path: Path) -> list[dict]:
 
 
 def setup_workdir(task: dict, condition: dict, indexes_dir: Path) -> Path:
-    """Create a temporary working directory for one task."""
+    """Create a temporary working directory for one task.
+
+    Uses a local full clone of Django (at ROOT/django_repo) as the source,
+    creating a git worktree for each task to avoid re-cloning.
+    """
     instance_id = task["instance_id"]
     base_commit = task.get("base_commit", "")
 
     workdir = Path(tempfile.mkdtemp(prefix=f"swe-{instance_id}-"))
-
-    # Clone repo at the right commit
-    repo_url = f"https://github.com/{task['repo']}.git"
     repo_dir = workdir / "testbed"
 
+    # Use local Django repo as source (must be full-cloned beforehand)
+    source_repo = ROOT / "django_repo"
+    if not source_repo.exists():
+        raise RuntimeError(
+            f"Django repo not found at {source_repo}. "
+            "Run: git clone https://github.com/django/django.git django_repo"
+        )
+
+    # Create a worktree at the specific commit (fast, no network)
     subprocess.run(
-        ["git", "clone", "--depth", "50", repo_url, str(repo_dir)],
-        capture_output=True, timeout=120,
+        ["git", "worktree", "add", "--detach", str(repo_dir), base_commit],
+        cwd=source_repo, capture_output=True, timeout=30,
     )
 
-    if base_commit:
+    # Fallback: if worktree fails, do a local clone
+    if not repo_dir.exists():
         subprocess.run(
-            ["git", "checkout", base_commit],
-            cwd=repo_dir, capture_output=True, timeout=30,
+            ["git", "clone", "--local", str(source_repo), str(repo_dir)],
+            capture_output=True, timeout=60,
         )
+        if base_commit:
+            subprocess.run(
+                ["git", "checkout", base_commit],
+                cwd=repo_dir, capture_output=True, timeout=30,
+            )
 
     # Copy GitNexus index if available and condition needs it
     if condition["gitnexus"]:
@@ -280,7 +296,15 @@ def main() -> int:
                 print(f"{status} ({result['duration_s']}s)")
 
             finally:
-                # Cleanup workdir
+                # Cleanup worktree first, then workdir
+                source_repo = ROOT / "django_repo"
+                try:
+                    subprocess.run(
+                        ["git", "worktree", "remove", "--force", str(workdir / "testbed")],
+                        cwd=source_repo, capture_output=True, timeout=30,
+                    )
+                except Exception:
+                    pass
                 shutil.rmtree(workdir, ignore_errors=True)
 
         # Save aggregated predictions (SWE-bench format)
