@@ -1,0 +1,17 @@
+# Condition A: Baseline — no GitNexus
+agent:
+  system_template: !include ../prompts/system_baseline.jinja
+  step_limit: 50
+  cost_limit: 5.0
+
+model:
+  model_name: anthropic/claude-sonnet-4-6
+  model_kwargs:
+    temperature: 0.0
+    drop_params: true
+  set_cache_control: default_end
+
+environment:
+  environment_class: docker
+  cwd: /testbed
+  timeout: 120

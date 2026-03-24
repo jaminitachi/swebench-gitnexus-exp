@@ -1,0 +1,11 @@
+data/
+results/
+logs/
+evaluation/
+venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+django_repo/
+*.egg-info/
