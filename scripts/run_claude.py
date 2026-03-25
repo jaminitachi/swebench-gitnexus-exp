@@ -106,15 +106,12 @@ def setup_workdir(task: dict, condition: dict, indexes_dir: Path) -> Path:
                 cwd=repo_dir, capture_output=True, timeout=30,
             )
 
-    # Copy GitNexus index if available and condition needs it
+    # Build GitNexus index if condition needs it
     if condition["gitnexus"]:
-        index_src = indexes_dir / base_commit / ".gitnexus"
-        if index_src.exists():
-            shutil.copytree(index_src, repo_dir / ".gitnexus")
-        else:
-            index_src2 = indexes_dir / instance_id / ".gitnexus"
-            if index_src2.exists():
-                shutil.copytree(index_src2, repo_dir / ".gitnexus")
+        subprocess.run(
+            ["gitnexus", "analyze", ".", "--force"],
+            cwd=repo_dir, capture_output=True, timeout=120,
+        )
 
     # Write CLAUDE.md for this condition
     system_prompt = condition["prompt_file"].read_text()
