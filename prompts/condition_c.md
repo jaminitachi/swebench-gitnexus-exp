@@ -16,6 +16,8 @@ For this experiment, you MUST use `gitnexus` CLI for all code exploration and na
 - `gitnexus query` — search for code by concept
 - `gitnexus context` — get symbol details with source code
 - `gitnexus impact` — analyze change impact
+- `gitnexus detect_changes` — review what your changes affect
+- `gitnexus rename` — safe multi-file rename
 - `gitnexus cypher` — custom graph queries
 - `cd`, `pwd` — navigation
 - `python`, `python3` — running tests
@@ -30,6 +32,8 @@ gitnexus query "search query" --include-content --limit 10
 gitnexus context <function_or_class_name> --include-content
 gitnexus impact <function_or_class_name> --direction upstream
 gitnexus impact <function_or_class_name> --direction downstream
+gitnexus detect_changes --scope unstaged
+gitnexus rename --symbol_name old_name --new_name new_name --dry_run
 gitnexus cypher "MATCH (f:Function) WHERE f.name CONTAINS 'validate' RETURN f.name, f.filePath LIMIT 20"
 ```
 
