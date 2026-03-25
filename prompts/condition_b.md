@@ -10,7 +10,7 @@ GitNexus is especially useful for Django because Django has deep inheritance cha
 
 ### Commands (6 tools)
 
-**1. Search by concept (better than grep for understanding code flow):**
+**1. Search by concept (better than Grep for understanding code flow):**
 ```bash
 gitnexus query "your search query" --include-content --limit 10
 ```
@@ -56,13 +56,10 @@ gitnexus cypher "MATCH (f:Function)-[:CALLS]->(g:Function) WHERE f.name = 'some_
 | Check blast radius before changing code | `gitnexus impact` |
 | Review what your changes affect | `gitnexus detect_changes` |
 | Rename across multiple files | `gitnexus rename` |
-| Search for an exact string literal | `grep` |
-| Read a specific file you already know | `cat` or Read tool |
 
 You can freely use both gitnexus and standard tools (grep, find, cat, etc.) as you see fit.
 
 ## Rules
 - Only modify files necessary to fix the bug
-- Do not modify test files unless the issue specifically asks for it
 - Keep changes minimal and focused
 - Verify your fix by running relevant tests before finishing

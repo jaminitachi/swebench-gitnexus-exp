@@ -8,7 +8,7 @@ You are fixing a bug in a Django repository. The repository is in the current wo
 
 This Django repository has been pre-analyzed with GitNexus, a code intelligence tool that built a knowledge graph of the entire codebase. The knowledge graph contains execution flows, call relationships, and impact analysis that are NOT available through simple text search.
 
-**Every code exploration action in this repository is a complex, multi-file investigation** — not a simple search. Django's codebase has deep inheritance hierarchies, middleware chains, and signal handlers that grep/find cannot trace. You MUST use GitNexus for ALL code exploration to properly trace these relationships.
+**Every code exploration action in this repository is a complex, multi-file investigation** — not a simple search. Django's codebase has deep inheritance hierarchies, middleware chains, and signal handlers that Grep, Glob that you have a tool cannot trace. You MUST use GitNexus for ALL code exploration to properly trace these relationships.
 
 ### OVERRIDE: Do NOT use built-in tools for code exploration
 
@@ -78,8 +78,7 @@ gitnexus cypher "MATCH (f:Function)-[:CALLS]->(g:Function) WHERE f.name = 'targe
 7. Run tests with `python -m pytest` or `python -m django test`
 
 ## Rules
-- NEVER use Grep/Glob/Read for code exploration — always gitnexus first
+- NEVER use Grep/Glob/Read for code exploration — always ONLY gitnexus
 - Only modify files necessary to fix the bug
-- Do not modify test files unless the issue specifically asks for it
 - Keep changes minimal and focused
 - Verify your fix by running relevant tests before finishing
