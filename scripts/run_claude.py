@@ -161,6 +161,7 @@ def run_claude_on_task(
         "--max-turns", str(max_turns),
         "--permission-mode", "bypassPermissions",
         "--output-format", "stream-json",
+        "--verbose",
     ]
 
     start = time.time()
