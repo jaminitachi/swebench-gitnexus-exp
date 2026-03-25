@@ -3,7 +3,7 @@
 SWE-bench experiment runner using Claude Code CLI (OAuth, no API key).
 
 Spawns `claude -p` for each task, with condition-specific CLAUDE.md.
-Uses Docker for environment isolation, pre-built GitNexus indexes.
+Saves full agent trace via --output-format stream-json.
 """
 
 from __future__ import annotations
@@ -23,19 +23,19 @@ ROOT = Path(__file__).resolve().parent.parent
 CONDITIONS = {
     "a": {
         "name": "baseline",
-        "prompt_file": ROOT / "prompts" / "system_baseline.jinja",
+        "prompt_file": ROOT / "prompts" / "condition_a.md",
         "gitnexus": False,
         "description": "Baseline: no GitNexus, standard tools only",
     },
     "b": {
         "name": "gitnexus-context",
-        "prompt_file": ROOT / "prompts" / "system_gitnexus.jinja",
+        "prompt_file": ROOT / "prompts" / "condition_b.md",
         "gitnexus": True,
         "description": "GitNexus available + usage guide in CLAUDE.md",
     },
     "c": {
         "name": "gitnexus-forced",
-        "prompt_file": ROOT / "prompts" / "system_forced.jinja",
+        "prompt_file": ROOT / "prompts" / "condition_c.md",
         "gitnexus": True,
         "description": "GitNexus only — grep/find/cat forbidden for code exploration",
     },
@@ -78,7 +78,7 @@ def setup_workdir(task: dict, condition: dict, indexes_dir: Path) -> Path:
     base_commit = task.get("base_commit", "")
 
     workdir = Path(tempfile.mkdtemp(prefix=f"swe-{instance_id}-"))
-    repo_dir = workdir / "testbed"
+    repo_dir = workdir / "repo"
 
     # Use local Django repo as source (must be full-cloned beforehand)
     source_repo = ROOT / "django_repo"
@@ -112,7 +112,6 @@ def setup_workdir(task: dict, condition: dict, indexes_dir: Path) -> Path:
         if index_src.exists():
             shutil.copytree(index_src, repo_dir / ".gitnexus")
         else:
-            # Fallback: try to find by instance_id
             index_src2 = indexes_dir / instance_id / ".gitnexus"
             if index_src2.exists():
                 shutil.copytree(index_src2, repo_dir / ".gitnexus")
@@ -131,10 +130,11 @@ def run_claude_on_task(
     model: str,
     max_turns: int,
     timeout: int,
+    trace_dir: Path,
 ) -> dict:
-    """Spawn claude -p for one task, collect results."""
+    """Spawn claude -p for one task, collect results + full trace."""
     instance_id = task["instance_id"]
-    repo_dir = workdir / "testbed"
+    repo_dir = workdir / "repo"
     problem = task["problem_statement"]
 
     prompt = f"""Fix this Django issue. The repository is in the current directory.
@@ -148,17 +148,19 @@ def run_claude_on_task(
 2. Find the relevant code
 3. Implement a minimal fix
 4. Verify with tests if possible
-5. When done, run: git diff
 """
 
-    # Spawn claude -p
+    # Full trace file
+    trace_file = trace_dir / f"{instance_id}.stream.jsonl"
+
+    # Spawn claude -p with stream-json for full trace
     cmd = [
         "claude",
         "-p", prompt,
         "--model", model,
         "--max-turns", str(max_turns),
         "--permission-mode", "bypassPermissions",
-        "--output-format", "json",
+        "--output-format", "stream-json",
     ]
 
     start = time.time()
@@ -171,6 +173,7 @@ def run_claude_on_task(
         "model_patch": None,
         "duration_s": None,
         "error": None,
+        "trace_file": str(trace_file),
     }
 
     try:
@@ -179,15 +182,33 @@ def run_claude_on_task(
         env.pop("CLAUDE_CODE", None)
         env.pop("CLAUDE_CODE_RUNNING", None)
 
-        proc = subprocess.run(
-            cmd,
-            cwd=repo_dir,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=env,
-        )
+        # Stream output to trace file
+        with trace_file.open("w") as trace_f:
+            proc = subprocess.run(
+                cmd,
+                cwd=repo_dir,
+                stdout=trace_f,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=timeout,
+                env=env,
+            )
         result["exit_code"] = proc.returncode
+
+        # Parse final result from stream (last line with type=result)
+        try:
+            with trace_file.open() as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            obj = json.loads(line)
+                            if obj.get("type") == "result":
+                                result["claude_result"] = obj
+                        except json.JSONDecodeError:
+                            pass
+        except Exception:
+            pass
 
         # Collect git diff as patch
         diff_proc = subprocess.run(
@@ -199,9 +220,6 @@ def run_claude_on_task(
         )
         patch = diff_proc.stdout.strip()
         result["model_patch"] = patch if patch else None
-
-        # Save Claude output for analysis
-        result["claude_output"] = proc.stdout[:10000] if proc.stdout else None
 
     except subprocess.TimeoutExpired:
         result["error"] = f"Timeout after {timeout}s"
@@ -248,8 +266,8 @@ def main() -> int:
         cond = CONDITIONS[cond_key]
         results_dir = ROOT / "results" / f"condition_{cond_key}"
         results_dir.mkdir(parents=True, exist_ok=True)
-        logs_dir = ROOT / "logs" / f"condition_{cond_key}"
-        logs_dir.mkdir(parents=True, exist_ok=True)
+        trace_dir = ROOT / "traces" / f"condition_{cond_key}"
+        trace_dir.mkdir(parents=True, exist_ok=True)
 
         print(f"\n{'='*60}")
         print(f"Condition {cond_key.upper()}: {cond['description']}")
@@ -283,6 +301,7 @@ def main() -> int:
                     model=args.model,
                     max_turns=args.max_turns,
                     timeout=args.timeout,
+                    trace_dir=trace_dir,
                 )
 
                 # Save individual result
@@ -300,7 +319,7 @@ def main() -> int:
                 source_repo = ROOT / "django_repo"
                 try:
                     subprocess.run(
-                        ["git", "worktree", "remove", "--force", str(workdir / "testbed")],
+                        ["git", "worktree", "remove", "--force", str(workdir / "repo")],
                         cwd=source_repo, capture_output=True, timeout=30,
                     )
                 except Exception:
@@ -334,6 +353,7 @@ def main() -> int:
         print(f"  Errors: {n_errors}")
         print(f"  Avg duration: {avg_dur:.0f}s")
         print(f"  Preds saved: {preds_file}")
+        print(f"  Traces saved: {trace_dir}")
 
     return 0
 
