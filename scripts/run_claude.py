@@ -37,7 +37,8 @@ CONDITIONS = {
         "name": "gitnexus-forced",
         "prompt_file": ROOT / "prompts" / "condition_c.md",
         "gitnexus": True,
-        "description": "GitNexus only — grep/find/cat forbidden for code exploration",
+        "disable_builtin_search": True,
+        "description": "GitNexus only — Grep/Glob disabled, must use gitnexus CLI",
     },
 }
 
@@ -160,6 +161,10 @@ def run_claude_on_task(
         "--output-format", "stream-json",
         "--verbose",
     ]
+
+    # Condition C: disable Grep/Glob/Read to force gitnexus usage
+    if condition.get("disable_builtin_search"):
+        cmd.extend(["--disallowed-tools", "Grep,Glob"])
 
     start = time.time()
     result = {
