@@ -162,7 +162,12 @@ def run_claude_on_task(
         "--verbose",
     ]
 
-    # Condition C: disable Grep/Glob/Read to force gitnexus usage
+    # B/C: attach gitnexus MCP server so tools appear as native MCP tools
+    if condition["gitnexus"]:
+        mcp_config = ROOT / "configs" / "gitnexus-mcp.json"
+        cmd.extend(["--mcp-config", str(mcp_config)])
+
+    # Condition C: disable Grep/Glob to force gitnexus MCP usage
     if condition.get("disable_builtin_search"):
         cmd.extend(["--disallowed-tools", "Grep,Glob"])
 
